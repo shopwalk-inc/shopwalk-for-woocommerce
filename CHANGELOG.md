@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ---
 
+## [3.1.15] — 2026-05-20
+
+### Added
+- New admin page **Shopwalk → ChatGPT (ACP)** for the OpenAI Agentic Commerce Protocol channel. Pre-opt-in view explains what ACP enables, runs a payment-processor compatibility check (Stripe or WooPayments active+enabled → "Full in-chat checkout available"; otherwise "Deep-link only"), renders a versioned ACP Terms Addendum loaded from `includes/acp/tos-vN.html`, and requires an explicit checkbox acknowledgement before submission. The Enable button POSTs to `/partners/v1/acp/opt-in` on shopwalk-api with `{tos_version, payment_compat, site_url}`. Post-opt-in view shows live status (Opted in / Paused), the current ACP feed item count, payment compatibility, the ToS version on file, and any active moderation flags affecting the merchant — each flag carries the WC product edit link so the merchant can fix the underlying issue. A one-click pause/resume toggle hits `/partners/v1/acp/pause`. Loaded under Tier 2 (Shopwalk integration), gated on a valid license. Implements Phase 1 Agent D of `shopwalk-infra/AI/markdown/platform/ACP_BUILD_PLAN.md`.
+
+---
+
 ## [3.1.0] — 2026-05-01
 
 ### Added
