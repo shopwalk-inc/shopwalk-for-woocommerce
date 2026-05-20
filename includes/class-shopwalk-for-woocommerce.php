@@ -128,6 +128,16 @@ final class WooCommerce_Shopwalk {
 		require_once $dir . 'class-shopwalk-dashboard-panel.php';
 		require_once $dir . 'class-shopwalk-direct-checkout-notifier.php';
 
+		// ACP (Agentic Commerce Protocol) merchant opt-in surface.
+		// Loaded under Tier 2 because the partner record on shopwalk-api is
+		// keyed by the license; without it there's no partner to opt in.
+		$acp_dir = WOOCOMMERCE_SHOPWALK_PLUGIN_DIR . 'includes/acp/';
+		require_once $acp_dir . 'class-shopwalk-acp-client.php';
+		if ( is_admin() ) {
+			require_once $acp_dir . 'class-shopwalk-acp-admin.php';
+			Shopwalk_ACP_Admin::instance();
+		}
+
 		Shopwalk_Sync::instance();
 		Shopwalk_Connector::instance();
 		Shopwalk_Direct_Checkout_Notifier::instance();
