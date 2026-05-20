@@ -419,7 +419,7 @@ final class Shopwalk_ACP_Admin {
 		$this->verify_request();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- verified above in verify_request().
-		$tos_ack        = isset( $_POST['acp_tos_ack'] ) && '1' === (string) $_POST['acp_tos_ack'];
+		$tos_ack        = isset( $_POST['acp_tos_ack'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['acp_tos_ack'] ) );
 		$payment_compat = isset( $_POST['payment_compat'] ) ? sanitize_text_field( wp_unslash( $_POST['payment_compat'] ) ) : 'deep_link';
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
@@ -449,7 +449,7 @@ final class Shopwalk_ACP_Admin {
 		$this->verify_request();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- verified above in verify_request().
-		$paused = isset( $_POST['paused'] ) && '1' === (string) $_POST['paused'];
+		$paused = isset( $_POST['paused'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['paused'] ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		$result = Shopwalk_ACP_Client::set_paused( $paused );
@@ -470,7 +470,7 @@ final class Shopwalk_ACP_Admin {
 	 * @return void
 	 */
 	private function verify_request(): void {
-		if ( 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
+		if ( 'POST' !== strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) ) {
 			wp_die( esc_html__( 'Invalid request method.', 'shopwalk-for-woocommerce' ), '', array( 'response' => 405 ) );
 		}
 		if ( ! current_user_can( 'manage_woocommerce' ) ) {
