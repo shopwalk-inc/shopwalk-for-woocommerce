@@ -1,11 +1,14 @@
 <?php
 /**
  * Tests for Shopwalk_ACP_Admin::detect_payment_compat() — the WC payment
- * gateway introspection that gates "Full in-chat checkout" vs "Deep-link
- * only" in the ACP opt-in surface.
+ * gateway introspection that decides "Full in-chat checkout" vs "Deep-link
+ * handoff" in the ACP status panel.
  *
  * Per the ACP spec (SHOPWALK_ACP_INTEGRATION.md §5), only WooPayments or
  * the Stripe gateway qualify as "full" for ACP shared payment tokens.
+ * This is informational only — it does NOT gate ACP eligibility. A store
+ * with no Stripe gateway is still in the feed; ChatGPT just deep-links
+ * to the store's own checkout instead of finishing in-chat.
  *
  * @package ShopwalkWooCommerce
  */
@@ -15,7 +18,7 @@ use Brain\Monkey\Functions;
 use PHPUnit\Framework\TestCase;
 
 defined( 'SHOPWALK_API_BASE' ) || define( 'SHOPWALK_API_BASE', 'https://api.shopwalk.test/api/v1' );
-defined( 'WOOCOMMERCE_SHOPWALK_VERSION' ) || define( 'WOOCOMMERCE_SHOPWALK_VERSION', '3.1.15-test' );
+defined( 'WOOCOMMERCE_SHOPWALK_VERSION' ) || define( 'WOOCOMMERCE_SHOPWALK_VERSION', '3.1.16-test' );
 defined( 'WOOCOMMERCE_SHOPWALK_PLUGIN_DIR' ) || define( 'WOOCOMMERCE_SHOPWALK_PLUGIN_DIR', __DIR__ . '/../' );
 
 require_once __DIR__ . '/../includes/acp/class-shopwalk-acp-client.php';

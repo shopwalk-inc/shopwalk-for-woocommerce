@@ -2,20 +2,16 @@
 /**
  * Shopwalk_ACP_Admin — "Shopwalk → AI Channels → ChatGPT (ACP)" admin page.
  *
- * Phase 1 Agent D of the ACP build plan
- * (`shopwalk-infra/AI/markdown/platform/ACP_BUILD_PLAN.md`). Implements the
- * merchant opt-in / pause / status UI described in
- * `shopwalk-infra/AI/markdown/platform/SHOPWALK_ACP_INTEGRATION.md` §5.
+ * Per `platform/SHOPWALK_ACP_INTEGRATION.md` §5 (post-spec-revision):
+ * connecting to Shopwalk = opted in to ACP. There is no separate ACP
+ * opt-in flow. This page renders a single-state status view: current
+ * status, pause/resume toggle, payment-compat indicator, feed count,
+ * and any active moderation flags.
  *
- * The page lives under the main `shopwalk-for-woocommerce` top-level menu
- * via two submenu entries:
- *   - "AI Channels" — a label-only parent that links to this page (the
- *     ChatGPT ACP one) and reserves room for future channels (Claude,
- *     Gemini) without restructuring the menu.
- *   - "ChatGPT (ACP)" — this page itself.
+ * Unlicensed / disconnected stores see a "connect to Shopwalk first" hint.
  *
  * Loaded only when the optional Shopwalk integration is connected
- * (Tier 2). Without a license there is no partner record to opt in.
+ * (Tier 2). Without a license there is no partner record to surface.
  *
  * @package ShopwalkWooCommerce
  */
@@ -47,13 +43,12 @@ final class Shopwalk_ACP_Admin {
 
 	private function __construct() {
 		add_action( 'admin_menu', array( $this, 'register_menu' ), 20 );
-		add_action( 'admin_post_shopwalk_acp_opt_in', array( $this, 'handle_opt_in' ) );
 		add_action( 'admin_post_shopwalk_acp_pause', array( $this, 'handle_pause_toggle' ) );
 	}
 
 	/**
-	 * Register the "AI Channels → ChatGPT (ACP)" submenu under the existing
-	 * Shopwalk top-level menu.
+	 * Register the "ChatGPT (ACP)" submenu under the existing Shopwalk
+	 * top-level menu.
 	 *
 	 * @return void
 	 */
@@ -79,6 +74,10 @@ final class Shopwalk_ACP_Admin {
 	 * Returns `'full'` (in-chat checkout available) or `'deep_link'` (no
 	 * compatible gateway — buyers will be redirected to the merchant's
 	 * own checkout page).
+	 *
+	 * Informational only — does NOT gate ACP eligibility. A store with no
+	 * Stripe gateway is still in the feed; ChatGPT just deep-links to the
+	 * store's own checkout instead of finishing in-chat.
 	 *
 	 * @return string One of 'full' | 'deep_link'.
 	 */
@@ -113,33 +112,13 @@ final class Shopwalk_ACP_Admin {
 		if ( 'full' === $compat ) {
 			return __( 'Full in-chat checkout available.', 'shopwalk-for-woocommerce' );
 		}
-		return __( 'Deep-link only (buyer redirected to your checkout page).', 'shopwalk-for-woocommerce' );
-	}
-
-	// ── ToS loader ───────────────────────────────────────────────────────
-
-	/**
-	 * Load the ToS addendum HTML from the bundled static file. Falls back
-	 * to a one-line stub if the file is missing (the checkbox still gates
-	 * opt-in so a missing ToS file fails closed).
-	 *
-	 * @return string Sanitized HTML safe to render with wp_kses_post.
-	 */
-	private function tos_html(): string {
-		$path = WOOCOMMERCE_SHOPWALK_PLUGIN_DIR . 'includes/acp/tos-' . Shopwalk_ACP_Client::TOS_VERSION . '.html';
-		if ( ! is_readable( $path ) ) {
-			return '<p>' . esc_html__( 'ACP terms not available. Contact support@shopwalk.com.', 'shopwalk-for-woocommerce' ) . '</p>';
-		}
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- bundled static ToS file shipped with the plugin.
-		$raw = (string) file_get_contents( $path );
-		return wp_kses_post( $raw );
+		return __( 'Deep-link handoff (buyer redirected to your checkout page).', 'shopwalk-for-woocommerce' );
 	}
 
 	// ── Page render ──────────────────────────────────────────────────────
 
 	/**
-	 * Top-level page renderer. Decides whether to show pre-opt-in or
-	 * post-opt-in based on the latest /status payload.
+	 * Top-level page renderer.
 	 *
 	 * @return void
 	 */
@@ -150,22 +129,29 @@ final class Shopwalk_ACP_Admin {
 
 		$status         = Shopwalk_ACP_Client::status();
 		$payment_compat = self::detect_payment_compat();
-		$state          = isset( $status['status'] ) ? (string) $status['status'] : 'not_offered';
+		$status_code    = isset( $status['status_code'] ) ? (int) $status['status_code'] : 0;
+		$state          = isset( $status['status'] ) ? (string) $status['status'] : '';
 
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'ChatGPT (ACP)', 'shopwalk-for-woocommerce' ) . '</h1>';
 
 		$this->render_action_notice();
 
-		if ( ! $status['ok'] ) {
-			$this->render_status_error( $status );
+		// Not connected to Shopwalk — show a connect hint and stop.
+		if ( ! $status['ok'] && ( 0 === $status_code || 401 === $status_code || 404 === $status_code ) ) {
+			$this->render_not_connected_view();
+			echo '</div>';
+			return;
 		}
 
-		if ( 'opted_in' === $state || 'paused' === $state ) {
-			$this->render_post_opt_in_view( $status, $payment_compat );
-		} else {
-			$this->render_pre_opt_in_view( $payment_compat );
+		// Transient server error — surface and let the merchant retry.
+		if ( ! $status['ok'] ) {
+			$this->render_status_error( $status );
+			echo '</div>';
+			return;
 		}
+
+		$this->render_status_view( $state, $status, $payment_compat );
 
 		echo '</div>';
 	}
@@ -192,8 +178,8 @@ final class Shopwalk_ACP_Admin {
 	}
 
 	/**
-	 * Render an error banner when /status failed to load. We still render
-	 * the pre-opt-in view below so the merchant can retry.
+	 * Render an error banner when /status failed with a non-recoverable
+	 * server error (5xx, timeouts).
 	 */
 	private function render_status_error( array $status ): void {
 		$message = isset( $status['message'] ) ? (string) $status['message'] : __( 'Could not reach Shopwalk.', 'shopwalk-for-woocommerce' );
@@ -204,91 +190,47 @@ final class Shopwalk_ACP_Admin {
 		);
 	}
 
-	// ── Pre-opt-in view ──────────────────────────────────────────────────
+	// ── Not-connected view ───────────────────────────────────────────────
 
 	/**
-	 * Pre-opt-in screen. Explains ACP, shows payment-processor compat, the
-	 * ToS addendum + checkbox, and the Enable button.
-	 *
-	 * @param string $payment_compat 'full' | 'deep_link'.
+	 * Render the placeholder for unlicensed / disconnected stores. ACP only
+	 * applies once the store is connected to Shopwalk.
 	 */
-	private function render_pre_opt_in_view( string $payment_compat ): void {
+	private function render_not_connected_view(): void {
+		$connect_url = admin_url( 'admin.php?page=shopwalk-for-woocommerce' );
 		?>
 		<div class="sw-card" style="background:#fff;border:1px solid #c3c4c7;border-radius:6px;padding:20px;margin:16px 0;max-width:820px;">
-			<h2><?php esc_html_e( 'Enable ChatGPT shopping for your store', 'shopwalk-for-woocommerce' ); ?></h2>
+			<h2><?php esc_html_e( 'Connect to Shopwalk to enable AI channels', 'shopwalk-for-woocommerce' ); ?></h2>
 			<p>
-				<?php esc_html_e( 'When you enable the ChatGPT channel, Shopwalk publishes your WooCommerce products into the OpenAI Agentic Commerce Protocol (ACP) feed under our partnership with OpenAI. ChatGPT can then surface your products inside the chat experience and — when a compatible payment processor is configured — complete the checkout in-chat. Orders flow back into your existing WooCommerce order pipeline, so reports, fulfillment, refunds, and reviews work exactly as they do today.', 'shopwalk-for-woocommerce' ); ?>
+				<?php esc_html_e( 'ChatGPT and other AI shopping agents access your products through Shopwalk. Connect your store to Shopwalk to make your products discoverable in ChatGPT and let AI agents complete checkouts on your behalf.', 'shopwalk-for-woocommerce' ); ?>
 			</p>
-
-			<h3><?php esc_html_e( 'Payment-processor compatibility', 'shopwalk-for-woocommerce' ); ?></h3>
 			<p>
-				<?php if ( 'full' === $payment_compat ) : ?>
-					<span style="color:#137333;font-weight:600;">&#x2705;</span>
-					<?php echo esc_html( $this->payment_compat_label( $payment_compat ) ); ?>
-					<br>
-					<span class="description">
-						<?php esc_html_e( 'We detected an active Stripe or WooPayments gateway. ACP shared payment tokens can be settled directly in your existing processor.', 'shopwalk-for-woocommerce' ); ?>
-					</span>
-				<?php else : ?>
-					<span style="color:#b26200;font-weight:600;">&#x26A0;&#xFE0F;</span>
-					<?php echo esc_html( $this->payment_compat_label( $payment_compat ) ); ?>
-					<br>
-					<span class="description">
-						<?php esc_html_e( 'No active Stripe or WooPayments gateway found. ChatGPT will deep-link buyers to your existing checkout instead of finalizing the order in chat.', 'shopwalk-for-woocommerce' ); ?>
-						<a href="<?php echo esc_url( admin_url( 'admin.php?page=wc-settings&tab=checkout' ) ); ?>"><?php esc_html_e( 'Configure payments →', 'shopwalk-for-woocommerce' ); ?></a>
-					</span>
-				<?php endif; ?>
+				<?php esc_html_e( 'There is no separate ChatGPT opt-in. Connecting to Shopwalk covers it. You can pause the AI channel from this page at any time.', 'shopwalk-for-woocommerce' ); ?>
 			</p>
-
-			<h3><?php esc_html_e( 'ACP Terms Addendum', 'shopwalk-for-woocommerce' ); ?></h3>
-			<div style="border:1px solid #dcdcde;border-radius:4px;padding:12px;max-height:280px;overflow:auto;background:#f6f7f7;">
-				<?php
-				// $this->tos_html() returns wp_kses_post-sanitized HTML.
-				echo $this->tos_html(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already sanitized via wp_kses_post.
-				?>
-			</div>
-
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:16px;">
-				<input type="hidden" name="action" value="shopwalk_acp_opt_in" />
-				<input type="hidden" name="payment_compat" value="<?php echo esc_attr( $payment_compat ); ?>" />
-				<?php wp_nonce_field( self::NONCE_ACTION, self::NONCE_FIELD ); ?>
-
-				<p>
-					<label>
-						<input type="checkbox" name="acp_tos_ack" value="1" required />
-						<?php
-						printf(
-							/* translators: %s: ToS version string, e.g. v1. */
-							esc_html__( 'I have read and accept the Shopwalk ACP Terms Addendum (%s) on behalf of my store.', 'shopwalk-for-woocommerce' ),
-							esc_html( Shopwalk_ACP_Client::TOS_VERSION )
-						);
-						?>
-					</label>
-				</p>
-
-				<p>
-					<button type="submit" class="button button-primary">
-						<?php esc_html_e( 'Enable ChatGPT channel', 'shopwalk-for-woocommerce' ); ?>
-					</button>
-				</p>
-			</form>
+			<p>
+				<a class="button button-primary" href="<?php echo esc_url( $connect_url ); ?>">
+					<?php esc_html_e( 'Connect to Shopwalk →', 'shopwalk-for-woocommerce' ); ?>
+				</a>
+			</p>
 		</div>
 		<?php
 	}
 
-	// ── Post-opt-in view ─────────────────────────────────────────────────
+	// ── Status view ──────────────────────────────────────────────────────
 
 	/**
-	 * Post-opt-in screen. Shows live status, pause/resume button, feed item
-	 * count, and any active moderation flags.
+	 * Render the single-state status panel — current state, pause/resume,
+	 * payment-compat, feed count, moderation flags.
+	 *
+	 * @param string $state         'opted_in' | 'paused' | '' (unknown — defaults to opted_in).
+	 * @param array  $status        Decoded /status response body.
+	 * @param string $payment_compat Locally-detected compat tag.
 	 */
-	private function render_post_opt_in_view( array $status, string $payment_compat ): void {
-		$state              = isset( $status['status'] ) ? (string) $status['status'] : 'opted_in';
-		$is_paused          = 'paused' === $state;
-		$feed_item_count    = isset( $status['feed_item_count'] ) ? (int) $status['feed_item_count'] : 0;
-		$moderation_flags   = isset( $status['moderation_flags'] ) && is_array( $status['moderation_flags'] ) ? $status['moderation_flags'] : array();
-		$server_compat      = isset( $status['payment_compat'] ) ? (string) $status['payment_compat'] : $payment_compat;
-		$server_tos_version = isset( $status['tos_version'] ) ? (string) $status['tos_version'] : '';
+	private function render_status_view( string $state, array $status, string $payment_compat ): void {
+		$is_paused        = 'paused' === $state;
+		$feed_item_count  = isset( $status['feed_item_count'] ) ? (int) $status['feed_item_count'] : 0;
+		$moderation_flags = isset( $status['moderation_flags'] ) && is_array( $status['moderation_flags'] ) ? $status['moderation_flags'] : array();
+		$server_compat    = isset( $status['payment_compat'] ) ? (string) $status['payment_compat'] : $payment_compat;
 		?>
 		<div class="sw-card" style="background:#fff;border:1px solid #c3c4c7;border-radius:6px;padding:20px;margin:16px 0;max-width:820px;">
 			<h2>
@@ -300,26 +242,35 @@ final class Shopwalk_ACP_Admin {
 				<?php endif; ?>
 			</h2>
 
+			<?php if ( $is_paused ) : ?>
+				<p>
+					<?php esc_html_e( 'Paused. Your products are temporarily hidden from ChatGPT and other AI agents through Shopwalk. In-flight ACP checkouts are allowed to complete; no new ones will be accepted.', 'shopwalk-for-woocommerce' ); ?>
+				</p>
+			<?php else : ?>
+				<p>
+					<?php esc_html_e( 'Active. Your products are accessible via ChatGPT and other AI agents through Shopwalk.', 'shopwalk-for-woocommerce' ); ?>
+				</p>
+			<?php endif; ?>
+
 			<table class="widefat striped" style="max-width:600px;margin-bottom:16px;">
 				<tbody>
 					<tr>
-						<th scope="row" style="width:200px;"><?php esc_html_e( 'Status', 'shopwalk-for-woocommerce' ); ?></th>
-						<td><?php echo esc_html( $is_paused ? __( 'Paused', 'shopwalk-for-woocommerce' ) : __( 'Opted in', 'shopwalk-for-woocommerce' ) ); ?></td>
-					</tr>
-					<tr>
-						<th scope="row"><?php esc_html_e( 'Items in ACP feed', 'shopwalk-for-woocommerce' ); ?></th>
+						<th scope="row" style="width:200px;"><?php esc_html_e( 'Items in ACP feed', 'shopwalk-for-woocommerce' ); ?></th>
 						<td><?php echo esc_html( number_format_i18n( $feed_item_count ) ); ?></td>
 					</tr>
 					<tr>
 						<th scope="row"><?php esc_html_e( 'Payment compatibility', 'shopwalk-for-woocommerce' ); ?></th>
-						<td><?php echo esc_html( $this->payment_compat_label( $server_compat ) ); ?></td>
+						<td>
+							<?php echo esc_html( $this->payment_compat_label( $server_compat ) ); ?>
+							<?php if ( 'full' !== $server_compat ) : ?>
+								<br><span class="description">
+									<a href="<?php echo esc_url( admin_url( 'admin.php?page=wc-settings&tab=checkout' ) ); ?>">
+										<?php esc_html_e( 'Configure WooPayments or Stripe to enable in-chat checkout →', 'shopwalk-for-woocommerce' ); ?>
+									</a>
+								</span>
+							<?php endif; ?>
+						</td>
 					</tr>
-					<?php if ( '' !== $server_tos_version ) : ?>
-					<tr>
-						<th scope="row"><?php esc_html_e( 'ToS version accepted', 'shopwalk-for-woocommerce' ); ?></th>
-						<td><?php echo esc_html( $server_tos_version ); ?></td>
-					</tr>
-					<?php endif; ?>
 				</tbody>
 			</table>
 
@@ -332,7 +283,11 @@ final class Shopwalk_ACP_Admin {
 						<?php echo esc_html( $is_paused ? __( 'Resume ChatGPT channel', 'shopwalk-for-woocommerce' ) : __( 'Pause ChatGPT channel', 'shopwalk-for-woocommerce' ) ); ?>
 					</button>
 					<span class="description" style="margin-left:8px;">
-						<?php esc_html_e( 'Pausing removes your products from the next feed publish. In-flight checkouts are allowed to complete.', 'shopwalk-for-woocommerce' ); ?>
+						<?php if ( $is_paused ) : ?>
+							<?php esc_html_e( 'Resume to re-include your products in the next feed publish.', 'shopwalk-for-woocommerce' ); ?>
+						<?php else : ?>
+							<?php esc_html_e( 'Pausing removes your products from the next feed publish. In-flight checkouts are allowed to complete.', 'shopwalk-for-woocommerce' ); ?>
+						<?php endif; ?>
 					</span>
 				</p>
 			</form>
@@ -407,38 +362,7 @@ final class Shopwalk_ACP_Admin {
 		<?php
 	}
 
-	// ── admin-post handlers ──────────────────────────────────────────────
-
-	/**
-	 * Handle the "Enable ChatGPT channel" form submission. Verifies nonce
-	 * + capability + ToS checkbox, then forwards to shopwalk-api.
-	 *
-	 * @return void
-	 */
-	public function handle_opt_in(): void {
-		$this->verify_request();
-
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- verified above in verify_request().
-		$tos_ack        = isset( $_POST['acp_tos_ack'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['acp_tos_ack'] ) );
-		$payment_compat = isset( $_POST['payment_compat'] ) ? sanitize_text_field( wp_unslash( $_POST['payment_compat'] ) ) : 'deep_link';
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
-
-		if ( ! in_array( $payment_compat, array( 'full', 'deep_link' ), true ) ) {
-			$payment_compat = 'deep_link';
-		}
-
-		if ( ! $tos_ack ) {
-			$this->redirect_back( 'error', __( 'You must acknowledge the ACP Terms Addendum to enable the channel.', 'shopwalk-for-woocommerce' ) );
-			return;
-		}
-
-		$result = Shopwalk_ACP_Client::opt_in( $payment_compat );
-		if ( $result['ok'] ) {
-			$this->redirect_back( 'ok', __( 'ChatGPT channel enabled. Your products will appear in the next feed publish.', 'shopwalk-for-woocommerce' ) );
-			return;
-		}
-		$this->redirect_back( 'error', (string) ( $result['message'] ?? __( 'Opt-in failed.', 'shopwalk-for-woocommerce' ) ) );
-	}
+	// ── admin-post handler ───────────────────────────────────────────────
 
 	/**
 	 * Handle pause/resume toggle.
@@ -464,7 +388,7 @@ final class Shopwalk_ACP_Admin {
 	}
 
 	/**
-	 * Shared request validation for the admin-post handlers — nonce,
+	 * Shared request validation for the admin-post handler — nonce,
 	 * capability, request method. Dies on failure.
 	 *
 	 * @return void
