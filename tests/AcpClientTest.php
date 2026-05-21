@@ -2,7 +2,7 @@
 /**
  * Tests for Shopwalk_ACP_Client — host_root derivation, request shape, and
  * response interpretation. These pin the contract against the shopwalk-api
- * partner endpoints Agent A exposes.
+ * partner endpoints (pause + status).
  *
  * @package ShopwalkWooCommerce
  */
@@ -12,7 +12,7 @@ use Brain\Monkey\Functions;
 use PHPUnit\Framework\TestCase;
 
 defined( 'SHOPWALK_API_BASE' ) || define( 'SHOPWALK_API_BASE', 'https://api.shopwalk.test/api/v1' );
-defined( 'WOOCOMMERCE_SHOPWALK_VERSION' ) || define( 'WOOCOMMERCE_SHOPWALK_VERSION', '3.1.15-test' );
+defined( 'WOOCOMMERCE_SHOPWALK_VERSION' ) || define( 'WOOCOMMERCE_SHOPWALK_VERSION', '3.1.16-test' );
 
 require_once __DIR__ . '/../includes/acp/class-shopwalk-acp-client.php';
 
@@ -98,36 +98,6 @@ final class AcpClientTest extends TestCase {
 		);
 	}
 
-	public function test_opt_in_targets_partners_v1_acp_opt_in_under_api_host(): void {
-		$this->fake_http(
-			array(
-				'response' => array( 'code' => 200 ),
-				'body'     => json_encode( array( 'status' => 'opted_in' ) ),
-			)
-		);
-
-		$result = Shopwalk_ACP_Client::opt_in( 'full' );
-
-		$this->assertTrue( $result['ok'] );
-		$this->assertSame( 'opted_in', $result['status'] );
-		$this->assertCount( 1 , $this->requests );
-
-		// The URL must NOT carry /api/v1 in front of /partners/... — ACP
-		// partner routes live at the host root, alongside /api/v1, not
-		// underneath it. If this assertion breaks, the host_root derivation
-		// has regressed.
-		$this->assertSame( 'https://api.shopwalk.test/partners/v1/acp/opt-in', $this->requests[0]['url'] );
-
-		$headers = $this->requests[0]['args']['headers'];
-		$this->assertSame( 'sw_site_test', $headers['X-API-Key'] );
-		$this->assertSame( 'application/json', $headers['Content-Type'] );
-
-		$body = json_decode( $this->requests[0]['args']['body'], true );
-		$this->assertSame( Shopwalk_ACP_Client::TOS_VERSION, $body['tos_version'] );
-		$this->assertSame( 'full', $body['payment_compat'] );
-		$this->assertSame( 'https://merchant.example', $body['site_url'] );
-	}
-
 	public function test_pause_request_carries_paused_flag(): void {
 		$this->fake_http(
 			array(
@@ -140,18 +110,43 @@ final class AcpClientTest extends TestCase {
 
 		$this->assertTrue( $result['ok'] );
 		$this->assertSame( 'paused', $result['status'] );
+		$this->assertCount( 1, $this->requests );
+
+		// The URL must NOT carry /api/v1 in front of /partners/... — ACP
+		// partner routes live at the host root, alongside /api/v1, not
+		// underneath it.
 		$this->assertSame( 'https://api.shopwalk.test/partners/v1/acp/pause', $this->requests[0]['url'] );
+
+		$headers = $this->requests[0]['args']['headers'];
+		$this->assertSame( 'sw_site_test', $headers['X-API-Key'] );
+		$this->assertSame( 'application/json', $headers['Content-Type'] );
 
 		$body = json_decode( $this->requests[0]['args']['body'], true );
 		$this->assertTrue( $body['paused'] );
+		$this->assertSame( 'https://merchant.example', $body['site_url'] );
+	}
+
+	public function test_resume_request_passes_paused_false(): void {
+		$this->fake_http(
+			array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array( 'status' => 'opted_in' ) ),
+			)
+		);
+
+		$result = Shopwalk_ACP_Client::set_paused( false );
+
+		$this->assertTrue( $result['ok'] );
+		$this->assertSame( 'opted_in', $result['status'] );
+		$body = json_decode( $this->requests[0]['args']['body'], true );
+		$this->assertFalse( $body['paused'] );
 	}
 
 	public function test_status_uses_get_and_returns_payload(): void {
 		$payload = array(
-			'status'          => 'opted_in',
-			'tos_version'     => 'v1',
-			'payment_compat'  => 'full',
-			'feed_item_count' => 42,
+			'status'           => 'opted_in',
+			'payment_compat'   => 'full',
+			'feed_item_count'  => 42,
 			'moderation_flags' => array(
 				array(
 					'product_id' => '123',
@@ -175,28 +170,48 @@ final class AcpClientTest extends TestCase {
 		$this->assertCount( 1, $result['moderation_flags'] );
 	}
 
+	public function test_status_404_surfaces_status_code(): void {
+		// 404 = partner not ACP-eligible (typically unlicensed/disconnected).
+		// The admin page uses status_code to decide whether to show the
+		// "Connect to Shopwalk first" view vs a transient error banner.
+		$this->fake_http(
+			array(
+				'response' => array( 'code' => 404 ),
+				'body'     => json_encode( array( 'message' => 'acp_not_eligible' ) ),
+			)
+		);
+
+		$result = Shopwalk_ACP_Client::status();
+
+		$this->assertFalse( $result['ok'] );
+		$this->assertSame( 404, $result['status_code'] );
+		$this->assertSame( 'acp_not_eligible', $result['message'] );
+	}
+
 	public function test_non_2xx_response_returns_error_with_api_message(): void {
 		$this->fake_http(
 			array(
 				'response' => array( 'code' => 422 ),
-				'body'     => json_encode( array( 'message' => 'tos_version_mismatch' ) ),
+				'body'     => json_encode( array( 'message' => 'invalid_request' ) ),
 			)
 		);
 
-		$result = Shopwalk_ACP_Client::opt_in( 'full' );
+		$result = Shopwalk_ACP_Client::set_paused( true );
 
 		$this->assertFalse( $result['ok'] );
-		$this->assertSame( 'tos_version_mismatch', $result['message'] );
+		$this->assertSame( 'invalid_request', $result['message'] );
+		$this->assertSame( 422, $result['status_code'] );
 	}
 
 	public function test_wp_error_response_returns_error_with_error_message(): void {
 		$err = new WP_Error( 'http_request_failed', 'connection refused', array() );
 		Functions\when( 'wp_remote_post' )->justReturn( $err );
 
-		$result = Shopwalk_ACP_Client::opt_in( 'full' );
+		$result = Shopwalk_ACP_Client::set_paused( true );
 
 		$this->assertFalse( $result['ok'] );
 		$this->assertSame( 'connection refused', $result['message'] );
+		$this->assertSame( 0, $result['status_code'] );
 	}
 
 	public function test_missing_license_short_circuits_with_clear_error(): void {
@@ -207,7 +222,7 @@ final class AcpClientTest extends TestCase {
 			}
 		);
 
-		$result = Shopwalk_ACP_Client::opt_in( 'full' );
+		$result = Shopwalk_ACP_Client::status();
 
 		$this->assertFalse( $result['ok'] );
 		$this->assertStringContainsString( 'No Shopwalk license', $result['message'] );

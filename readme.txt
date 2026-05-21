@@ -6,7 +6,7 @@ Tested up to: 7.0
 Requires PHP: 8.1
 WC requires at least: 8.0
 WC tested up to: 9.8
-Stable tag: 3.1.15
+Stable tag: 3.1.16
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -130,6 +130,9 @@ Shopwalk Privacy Policy: https://shopwalk.com/privacy
 3. WooCommerce → Settings → Payments. The "Pay via UCP" gateway is registered automatically alongside Stripe, PayPal, and any other gateway you already use.
 
 == Changelog ==
+
+= 3.1.16 =
+* Simplified the **Shopwalk → ChatGPT (ACP)** admin page. The separate ACP opt-in dance (ToS-addendum view, checkbox, Enable button) has been removed — connected merchants are automatically opted in by virtue of being connected to Shopwalk; ACP coverage rides on the main Shopwalk Terms of Service the merchant accepted at connect time. The page now renders a single-state status panel: current `Active`/`Paused` state, in-feed item count, payment-compatibility indicator (informational only), one-click pause/resume button, and any active moderation flags. Unlicensed/disconnected stores see a "Connect to Shopwalk first" prompt. Pause behavior unchanged.
 
 = 3.1.15 =
 * New admin page **Shopwalk → ChatGPT (ACP)** for the OpenAI Agentic Commerce Protocol channel. Pre-opt-in view explains what enabling ACP does, detects whether an active WooPayments/Stripe gateway is configured (showing "Full in-chat checkout available" or "Deep-link only"), renders a versioned ACP Terms Addendum, and requires explicit acknowledgement before submitting. Enable button POSTs to `/partners/v1/acp/opt-in` on shopwalk-api with the ToS version + detected payment compatibility. Post-opt-in view shows live status, item count in the ACP feed, payment compatibility, and any active moderation flags affecting the store with direct edit links to the WC product. One-click pause/resume hits `/partners/v1/acp/pause`. Loaded under Tier 2 only — no license, no ACP page.

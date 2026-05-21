@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ---
 
+## [3.1.16] — 2026-05-20
+
+### Changed
+- **Simplified the ACP admin page.** The separate opt-in flow shipped in 3.1.15 (ToS-addendum view, checkbox, Enable button, `/partners/v1/acp/opt-in` POST) is removed. Connected merchants are automatically opted in to ACP by virtue of being connected to Shopwalk — ACP coverage rides on the main Shopwalk ToS the merchant accepted at connect time. The page now renders a single-state status panel: current `Active`/`Paused` state, in-feed item count, payment-compatibility indicator (informational only — does NOT gate ACP eligibility), one-click pause/resume button, and any active moderation flags. Unlicensed / disconnected stores see a "Connect to Shopwalk first" prompt. Pause toggle behavior unchanged.
+
+### Removed
+- `Shopwalk_ACP_Client::opt_in()` method (the `/partners/v1/acp/opt-in` route on shopwalk-api was removed in PR #241).
+- `Shopwalk_ACP_Client::TOS_VERSION` constant — no longer needed.
+- `includes/acp/tos-v1.html` static ToS file — coverage is in the main Shopwalk ToS.
+- `tests/AcpClientTest.php` opt-in test cases.
+
+---
+
 ## [3.1.15] — 2026-05-20
 
 ### Added
