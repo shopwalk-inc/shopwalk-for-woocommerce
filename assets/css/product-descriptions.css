@@ -1,0 +1,101 @@
+/* Shopwalk AI Product Descriptions — admin styles. */
+
+.shopwalk-pd-meta-box .shopwalk-pd-controls p,
+.shopwalk-pd-meta-box .shopwalk-pd-preview {
+  margin-bottom: 8px;
+}
+
+.shopwalk-pd-banner {
+  padding: 8px 10px;
+  border-radius: 3px;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+.shopwalk-pd-banner-info {
+  background: #f0f6fc;
+  border-left: 3px solid #2271b1;
+}
+.shopwalk-pd-banner-warn {
+  background: #fcf9e8;
+  border-left: 3px solid #dba617;
+}
+
+.shopwalk-pd-preview-body {
+  background: #f6f7f7;
+  padding: 8px;
+  border-radius: 3px;
+  min-height: 60px;
+  max-height: 220px;
+  overflow: auto;
+  margin: 4px 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.shopwalk-pd-pending-review {
+  margin-top: 10px;
+  padding: 8px;
+  border: 1px dashed #c3c4c7;
+  border-radius: 3px;
+  background: #fafafa;
+}
+
+.shopwalk-pd-history summary {
+  cursor: pointer;
+  margin-top: 8px;
+  color: #2271b1;
+}
+.shopwalk-pd-history ul {
+  margin: 6px 0 0 18px;
+  font-size: 12px;
+}
+.shopwalk-pd-history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+.shopwalk-pd-history-when {
+  color: #646970;
+}
+
+.shopwalk-pd-status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #646970;
+  min-height: 1em;
+}
+.shopwalk-pd-status.is-error { color: #b32d2e; }
+.shopwalk-pd-status.is-ok    { color: #007017; }
+
+/* Panel — bulk job UI */
+.shopwalk-pd-progress {
+  background: #f0f0f1;
+  border-radius: 6px;
+  height: 14px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.shopwalk-pd-progress-bar {
+  height: 100%;
+  background: #2271b1;
+  transition: width 0.4s ease;
+}
+.shopwalk-pd-progress-text {
+  font-size: 13px;
+  color: #1d2327;
+}
+.shopwalk-pd-status-label {
+  color: #646970;
+  font-style: italic;
+}
+
+.shopwalk-pd-card h2 .status-pill {
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  vertical-align: middle;
+}
+.shopwalk-pd-card .status-pill.ok   { background: #d4edda; color: #155724; }
+.shopwalk-pd-card .status-pill.warn { background: #fff3cd; color: #856404; }
