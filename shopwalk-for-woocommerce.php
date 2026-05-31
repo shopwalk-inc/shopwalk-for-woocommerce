@@ -84,6 +84,25 @@ require_once WOOCOMMERCE_SHOPWALK_PLUGIN_DIR . 'includes/features/catalog-sync/c
 
 add_action( 'plugins_loaded', array( 'WooCommerce_Shopwalk', 'instance' ), 5 );
 
+// ─── v4 feature auto-loader ─────────────────────────────────────────────────
+//
+// Each feature under includes/features/<slug>/ self-registers via its own
+// class-<slug>-feature.php entry. The loader is generic — adding a new
+// feature is a single-directory drop-in, no central bootstrap edit.
+//
+// Each feature entry file is expected to call shopwalk_register_feature()
+// when that helper exists, and otherwise to register its own plugins_loaded
+// hook so it remains functional in isolation.
+( static function (): void {
+	$feature_glob = glob( WOOCOMMERCE_SHOPWALK_PLUGIN_DIR . 'includes/features/*/class-*-feature.php' );
+	if ( ! is_array( $feature_glob ) ) {
+		return;
+	}
+	foreach ( $feature_glob as $file ) {
+		require_once $file;
+	}
+} )();
+
 // ─── Plugin action links (Plugins list page) ────────────────────────────────
 
 add_filter(
