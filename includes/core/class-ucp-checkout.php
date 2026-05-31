@@ -581,39 +581,14 @@ final class UCP_Checkout {
 		$order->update_meta_data( '_ucp_client_id', (string) $row['client_id'] );
 		$order->calculate_totals();
 
-		// Dispatch agent-native payment through the router. The router picks
-		// the adapter matching `payment.gateway` and the adapter reuses the
-		// merchant's already-configured WooCommerce gateway credentials —
-		// the plugin itself owns no payment keys.
-		//
-		// If payment is omitted or the selected gateway can't auto-authorize
-		// (e.g. Stripe requires 3DS), the order stays in `pending` and the
-		// session's `order.payment_url` is returned so the agent can hand
-		// the buyer off to native checkout.
-		$payment = json_decode( (string) $row['payment'], true );
-		$payment = is_array( $payment ) ? $payment : array();
-
-		if ( ! empty( $payment['gateway'] ) ) {
-			$result = UCP_Payment_Router::authorize( $order, $payment );
-
-			if ( is_wp_error( $result ) ) {
-				$code = $result->get_error_code();
-				// `stripe_requires_action` and similar soft failures are
-				// recoverable via the payment_url handoff — keep the order
-				// in pending so the buyer can complete 3DS on native checkout.
-				if ( 'stripe_requires_action' === $code ) {
-					$order->update_status( 'pending', 'UCP payment deferred to buyer (3DS required): ' . $result->get_error_message() );
-					return $order;
-				}
-				$order->update_status( 'failed', sprintf( 'UCP payment (%s) failed: %s', $code, $result->get_error_message() ) );
-				return $result;
-			}
-			// Adapter already advanced the order state via payment_complete().
-			return $order;
-		}
-
-		// No payment credential supplied — fall back to the payment_url
-		// handoff. The agent can still hand the buyer to native checkout.
+		// v4.0 — the plugin no longer attempts to authorize the payment
+		// in-band. Agent-native payment dispatch (UCP_Payment_Router + adapters)
+		// was part of the v3 direct-checkout direction, which is out of scope
+		// in the v4 product (`[ACP is not part of the shopwalk-woocommerce
+		// design]`, `[Free tier = UCP setup only, no sync 2026-05-31]`). The
+		// agent receives the session's `order.payment_url` and hands the
+		// buyer off to native WC checkout. The order stays in `pending` until
+		// the buyer completes payment through the merchant's existing gateway.
 		$order->update_status( 'pending', 'UCP session completed; awaiting buyer payment.' );
 		return $order;
 	}

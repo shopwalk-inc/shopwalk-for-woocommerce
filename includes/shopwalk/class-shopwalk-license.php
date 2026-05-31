@@ -2,6 +2,10 @@
 /**
  * Shopwalk_License — license key validation + heartbeat.
  *
+ * v4.0 model: Free tier = no license required (Google UCP setup works without
+ * a key); Pro tier = license-activated. A populated license key is the gate
+ * that lights up Pro features in the dashboard.
+ *
  * Tier 2 (Shopwalk integration) only. Loaded by WooCommerce_Shopwalk::load_shopwalk()
  * when a valid `shopwalk_license_key` option is present.
  *
