@@ -132,11 +132,53 @@ Shopwalk Privacy Policy: https://shopwalk.com/privacy
 == Changelog ==
 
 = 4.6.0 =
-**AI brand-voice training (Pro / Pro+).** Train a per-tenant brand voice on Shopwalk's backend from a curated corpus of existing posts/pages/product descriptions, uploaded .txt/.md files, and pasted samples. The trained voice is consumed by product-description and SEO generation in v1.0 and by long-form authoring (blogs, email, ads) in v1.1+.
+**The v4 pivot — AI features for WooCommerce.** The plugin's product direction reshapes from "make any WC store fully purchasable by AI agents" to "AI features that make the merchant's own store work better for their own shoppers, plus free Google UCP setup for AI-agent discoverability." Six v1.0 features land in this release; the v3-era ACP, direct-checkout, and payment-router code is removed. Shopwalk no longer participates in checkout — merchants keep 100% of sales on their existing WC payment gateway.
 
-* **Added:** WP-Admin → Shopwalk → Brand Voice submenu with corpus auto-discovery picker, .txt/.md uploads (50 files × 2MB), paste-text box, minimum-word-count gate (5,000 words), Action-Scheduler-driven batch upload, 30s status poll, and post-train sample-output preview.
-* **Added:** Stable public cross-feature contract — `Shopwalk_Brand_Voice::is_trained()`, `::get_active_voice_id()`, `::get_status()`, `::get_profile_summary()`. Downstream generation features consume the trained voice through this interface only.
-* **Added:** Three shopwalk-api endpoints — `POST /plugin/ai/brand-voice/train` (batch upload), `GET /plugin/ai/brand-voice/status` (poll), `GET /plugin/ai/brand-voice/profile` (preview + summary), plus `DELETE …/profile` for reset. Auth: `Authorization: Bearer <license>` + `X-Shopwalk-HMAC: <sha256(body, license)>`.
+**Foundation:**
+
+* **Removed:** ACP admin + client, UCP direct-checkout + payment-router + Stripe payment-adapter, Shopwalk direct-checkout-notifier, and their tests (12 files).
+* **Reshape:** Connect / License / Dashboard models now match the new tier shape. Free = Google UCP setup, no account; Pro = catalog sync + AI suite via a Shopwalk-connected license.
+* **Added:** `shopwalk_register_feature(string $class_name): void` global + `Shopwalk_Feature_Registry` singleton. Features self-register and each contributes a dashboard tab. Pro-tier tabs render an upgrade CTA on Free installs.
+* **Added:** One-time dismissable v3→v4 upgrade notice on first activation post-update.
+
+**Catalog sync (Pro):**
+
+* Pushes WC product + order data to Shopwalk on an Action-Scheduler-driven delta sync (every 5 min) plus a full sync on Pro activation or the "Run full sync" button. HPOS-compatible order delta detection. Per-tick caps so a busy merchant drains across multiple windows without hammering shopwalk-api. Sync log surfaced in the dashboard.
+* **Added:** `POST /api/v1/plugin/sync/batch` + `POST /api/v1/plugin/orders/batch`.
+
+**AI product descriptions (Pro / Pro+):**
+
+* Per-product meta box on the WC product edit screen with tone override (Brand voice / Friendly / Professional / Technical / Playful), length target (short / medium / long), optional focus keyphrase, preview, and accept / reject before applying.
+* Bulk mode from the dashboard — select by filter (all / by category / by tag / missing description / short description), kick off an Action-Scheduler job, progress bar.
+* Integrates with brand-voice training when present; falls back to tone override otherwise.
+* **Added:** `POST /api/v1/plugin/ai/descriptions/generate` — image-aware (passes image URLs so Shopwalk's vision model extracts feature mentions).
+
+**AI semantic search (Pro / Pro+):**
+
+* Off / Augment / Replace modes for WP's product search. Vector retrieval over per-merchant embeddings; synonym CSV upload; intent + typo handling; ranker re-rank. Storefront rendering goes through the merchant's theme — no Shopwalk-branded results UI.
+* 60-second transient cache per `(query, scope, partner_id)`. 800 ms latency budget — falls back to native WP search on backend timeout or failure.
+* **Added:** `POST /api/v1/plugin/ai/search`.
+
+**AI recommendations (Pro / Pro+):**
+
+* Three types — *Also viewed* (collaborative filtering), *Related products* (catalog similarity), *Frequently bought together* (market-basket). Plus a `personalized` type that opts in the logged-in customer's user_id.
+* Auto-injection: also-viewed on single product page; FBT on cart page. Plus a Gutenberg block, a shortcode (`[shopwalk_recommendations type="related" product_id="123"]`), and a REST endpoint (`/wp-json/shopwalk/v1/recommendations`) for lazy loading.
+* **Added:** `POST /api/v1/plugin/ai/recommendations` — backend returns `fallback: true` when ranker has insufficient signal and falls back to a heuristic set.
+
+**AI SEO + image optimization (Pro / Pro+):**
+
+* Per-product meta box generates meta title (60-char target), meta description (155-char target), per-image alt text, and an on-page SEO checklist. Bulk mode for catalog-wide application.
+* Coexists with Yoast / RankMath / AIOSEO — detects the active SEO plugin and writes meta to its custom fields rather than shipping a competing surface. Image alt always writes to `_wp_attachment_image_alt`; existing non-empty alts are never overwritten without explicit `overwrite_alt` opt-in.
+* **Added:** `POST /api/v1/plugin/ai/seo/generate`.
+
+**AI brand-voice training (Pro / Pro+):**
+
+* Discovers existing brand-voice signal in the site (`post`, `page`, `product`, published only, capped at 500); merchant approves / rejects per item, optionally adds .txt / .md uploads (50 files × 2 MB) and pasted text. 5,000-word minimum corpus.
+* Action-Scheduler batches the corpus upload, polls training status every 30 seconds, exposes a post-train sample-output preview.
+* Stable public cross-feature contract — `Shopwalk_Brand_Voice::is_trained()`, `::get_active_voice_id()`, `::get_status()`, `::get_profile_summary()`. Downstream generation features consume the trained voice through this interface only.
+* **Added:** `POST /plugin/ai/brand-voice/train` (batch upload), `GET /plugin/ai/brand-voice/status` (poll), `GET /plugin/ai/brand-voice/profile` (preview + summary), `DELETE /plugin/ai/brand-voice/profile` (reset).
+
+**Auth (every new API endpoint above):** `Authorization: Bearer <license_key>` + `X-Shopwalk-HMAC: <sha256(timestamp + "." + body, license_key)>` + `X-Shopwalk-Timestamp` (5-minute replay window).
 
 = 3.1.16 =
 * Simplified the **Shopwalk → ChatGPT (ACP)** admin page. The separate ACP opt-in dance (ToS-addendum view, checkbox, Enable button) has been removed — connected merchants are automatically opted in by virtue of being connected to Shopwalk; ACP coverage rides on the main Shopwalk Terms of Service the merchant accepted at connect time. The page now renders a single-state status panel: current `Active`/`Paused` state, in-feed item count, payment-compatibility indicator (informational only), one-click pause/resume button, and any active moderation flags. Unlicensed/disconnected stores see a "Connect to Shopwalk first" prompt. Pause behavior unchanged.
