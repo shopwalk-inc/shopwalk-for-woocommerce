@@ -2,12 +2,16 @@
 /**
  * Shopwalk_Connect — OAuth connect flow + Pro upgrade launcher + hourly tier poller.
  *
- * Drives the three-state install model (unlicensed / free / pro) on the
- * WordPress side. Paired with:
+ * v4.0 model: Free install needs no connect (Google UCP setup is local to the
+ * WordPress install and requires no Shopwalk account). The Connect flow is
+ * the Pro upgrade entry point — merchant clicks "Connect to Shopwalk", picks
+ * a Pro tier on shopwalk.com, runs the OAuth Authorization Code handshake,
+ * and lands back with a license key bound to the site URL.
+ *
+ * Paired with:
  *   - shopwalk-api POST /api/v1/plugin/oauth/token  (mint license from code)
- *   - shopwalk-api GET  /api/v1/plugin/upgrade-url (Stripe Checkout URL)
- *   - shopwalk-api GET  /api/v1/plugin/status      (tier + status)
- *   - shopwalk-web /partners/oauth/plugin/authorize (merchant approves)
+ *   - shopwalk-api GET  /api/v1/plugin/status      (tier + status; hourly poll)
+ *   - shopwalk-web /partners/signup                (merchant signup + tier picker)
  *
  * @package ShopwalkWooCommerce
  */

@@ -49,11 +49,23 @@ final class WooCommerce_Shopwalk {
 	 * Constructor — wire up everything.
 	 */
 	private function __construct() {
+		// v4.0 — load the feature registry first so feature classes (loaded
+		// later in this constructor or in third-party code on plugins_loaded)
+		// can call `shopwalk_register_feature()` against it. The registry
+		// itself is admin-agnostic; the dashboard reads it to render panel
+		// tabs. See includes/class-shopwalk-feature-registry.php.
+		require_once WOOCOMMERCE_SHOPWALK_PLUGIN_DIR . 'includes/class-shopwalk-feature-registry.php';
+
 		$this->load_core();
 		if ( $this->is_shopwalk_connected() ) {
 			$this->load_shopwalk();
 		}
 		$this->load_admin();
+
+		// Fire the feature-registration hook AFTER core + shopwalk + admin are
+		// wired. Features register themselves against the registry in response
+		// to this action; the dashboard render path then consumes the registry.
+		do_action( 'shopwalk_features_register' );
 	}
 
 	/**
@@ -71,20 +83,15 @@ final class WooCommerce_Shopwalk {
 		// UCP response envelope helper — loaded before commerce classes that depend on it.
 		require_once $dir . 'class-ucp-response.php';
 
-		// Payment router + shipped adapters — loaded before checkout so the
-		// /complete handler can dispatch to them. Interface goes first
-		// (the router and concrete adapter both implement it).
-		require_once $dir . 'interface-ucp-payment-adapter.php';
-		require_once $dir . 'class-ucp-payment-router.php';
-		require_once $dir . 'class-ucp-payment-adapter-stripe.php';
-
 		// OAuth subsystem.
 		require_once $dir . 'class-ucp-oauth-clients.php';
 		require_once $dir . 'class-ucp-oauth-server.php';
 
-		// Commerce surface.
+		// Commerce surface. v4.0 — UCP_Direct_Checkout + UCP_Payment_Router +
+		// shipped adapters were removed; the plugin no longer attempts to
+		// authorize payments in-band. Agents are handed off to the merchant's
+		// native WC checkout via `order.payment_url`.
 		require_once $dir . 'class-ucp-checkout.php';
-		require_once $dir . 'class-ucp-direct-checkout.php';
 		require_once $dir . 'class-ucp-orders.php';
 
 		// Webhooks. URL guard is loaded first — both subscribe-time and
@@ -126,21 +133,16 @@ final class WooCommerce_Shopwalk {
 		require_once $dir . 'class-shopwalk-sync.php';
 		require_once $dir . 'class-shopwalk-connector.php';
 		require_once $dir . 'class-shopwalk-dashboard-panel.php';
-		require_once $dir . 'class-shopwalk-direct-checkout-notifier.php';
 
-		// ACP (Agentic Commerce Protocol) merchant opt-in surface.
-		// Loaded under Tier 2 because the partner record on shopwalk-api is
-		// keyed by the license; without it there's no partner to opt in.
-		$acp_dir = WOOCOMMERCE_SHOPWALK_PLUGIN_DIR . 'includes/acp/';
-		require_once $acp_dir . 'class-shopwalk-acp-client.php';
-		if ( is_admin() ) {
-			require_once $acp_dir . 'class-shopwalk-acp-admin.php';
-			Shopwalk_ACP_Admin::instance();
-		}
+		// v4.0 — Shopwalk_Direct_Checkout_Notifier + the ACP
+		// (Agentic Commerce Protocol) merchant opt-in surface have been
+		// removed. ACP is not part of the shopwalk-woocommerce design;
+		// direct-checkout was the v3 in-band payment path that is no longer
+		// in scope. See shopwalk-infra/shopwalk-woocommerce/partner/plugin/
+		// for the v4 product direction.
 
 		Shopwalk_Sync::instance();
 		Shopwalk_Connector::instance();
-		Shopwalk_Direct_Checkout_Notifier::instance();
 
 		// Auto-activate prefilled license if pending (set during plugin activation
 		// hook when Shopwalk_License wasn't loaded yet).
@@ -167,6 +169,7 @@ final class WooCommerce_Shopwalk {
 		$dir = WOOCOMMERCE_SHOPWALK_PLUGIN_DIR . 'includes/admin/';
 		require_once $dir . 'class-dashboard.php';
 		require_once $dir . 'class-deadletter-admin.php';
+		require_once $dir . 'class-upgrade-notice.php';
 
 		// Shopwalk_Connect drives OAuth connect + Pro upgrade + hourly tier
 		// poll. Loaded in admin always (unlicensed users need the Connect
@@ -180,6 +183,7 @@ final class WooCommerce_Shopwalk {
 
 		WooCommerce_Shopwalk_Admin_Dashboard::instance();
 		WooCommerce_Shopwalk_Admin_Deadletter::instance();
+		Shopwalk_Upgrade_Notice::instance();
 	}
 
 	/**
@@ -259,6 +263,9 @@ final class WooCommerce_Shopwalk {
 	public static function deactivate(): void {
 		wp_clear_scheduled_hook( 'shopwalk_session_cleanup' );
 		wp_clear_scheduled_hook( 'shopwalk_webhook_flush' );
+		// `shopwalk_direct_checkout_cleanup` is cleared defensively even
+		// though no v4 code schedules it — pre-existing installs may have
+		// the cron entry from v3.x; sweeping it keeps wp_cron clean.
 		wp_clear_scheduled_hook( 'shopwalk_direct_checkout_cleanup' );
 		wp_clear_scheduled_hook( 'shopwalk_flush_queue' );
 		wp_clear_scheduled_hook( 'shopwalk_status_poll' );

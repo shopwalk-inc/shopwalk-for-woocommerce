@@ -64,7 +64,6 @@ final class UCP_Bootstrap {
 		UCP_Products::register_routes();
 		UCP_OAuth_Server::register_routes();
 		UCP_Checkout::register_routes();
-		UCP_Direct_Checkout::register_routes();
 		UCP_Orders::register_routes();
 		UCP_Webhook_Subscriptions::register_routes();
 		UCP_Sync_Trigger::register_routes();
