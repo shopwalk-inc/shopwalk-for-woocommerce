@@ -6,7 +6,7 @@ Tested up to: 7.0
 Requires PHP: 8.1
 WC requires at least: 8.0
 WC tested up to: 9.8
-Stable tag: 4.1.0
+Stable tag: 4.6.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -130,6 +130,13 @@ Shopwalk Privacy Policy: https://shopwalk.com/privacy
 3. WooCommerce → Settings → Payments. The "Pay via UCP" gateway is registered automatically alongside Stripe, PayPal, and any other gateway you already use.
 
 == Changelog ==
+
+= 4.6.0 =
+**AI brand-voice training (Pro / Pro+).** Train a per-tenant brand voice on Shopwalk's backend from a curated corpus of existing posts/pages/product descriptions, uploaded .txt/.md files, and pasted samples. The trained voice is consumed by product-description and SEO generation in v1.0 and by long-form authoring (blogs, email, ads) in v1.1+.
+
+* **Added:** WP-Admin → Shopwalk → Brand Voice submenu with corpus auto-discovery picker, .txt/.md uploads (50 files × 2MB), paste-text box, minimum-word-count gate (5,000 words), Action-Scheduler-driven batch upload, 30s status poll, and post-train sample-output preview.
+* **Added:** Stable public cross-feature contract — `Shopwalk_Brand_Voice::is_trained()`, `::get_active_voice_id()`, `::get_status()`, `::get_profile_summary()`. Downstream generation features consume the trained voice through this interface only.
+* **Added:** Three shopwalk-api endpoints — `POST /plugin/ai/brand-voice/train` (batch upload), `GET /plugin/ai/brand-voice/status` (poll), `GET /plugin/ai/brand-voice/profile` (preview + summary), plus `DELETE …/profile` for reset. Auth: `Authorization: Bearer <license>` + `X-Shopwalk-HMAC: <sha256(body, license)>`.
 
 = 3.1.16 =
 * Simplified the **Shopwalk → ChatGPT (ACP)** admin page. The separate ACP opt-in dance (ToS-addendum view, checkbox, Enable button) has been removed — connected merchants are automatically opted in by virtue of being connected to Shopwalk; ACP coverage rides on the main Shopwalk Terms of Service the merchant accepted at connect time. The page now renders a single-state status panel: current `Active`/`Paused` state, in-feed item count, payment-compatibility indicator (informational only), one-click pause/resume button, and any active moderation flags. Unlicensed/disconnected stores see a "Connect to Shopwalk first" prompt. Pause behavior unchanged.
