@@ -1,0 +1,43 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 2,
+	"name": "shopwalk/recommendations",
+	"version": "1.0.0",
+	"title": "Shopwalk Recommendations",
+	"category": "woocommerce",
+	"icon": "grid-view",
+	"description": "Show AI-driven product recommendations on the storefront. Three types: customers also viewed, related products, frequently bought together.",
+	"keywords": ["shopwalk", "recommendations", "related", "woocommerce", "ai"],
+	"textdomain": "shopwalk-for-woocommerce",
+	"supports": {
+		"html": false,
+		"align": ["wide", "full"],
+		"reusable": true
+	},
+	"attributes": {
+		"type": {
+			"type": "string",
+			"default": "related",
+			"enum": ["also_viewed", "related", "fbt", "personalized"]
+		},
+		"productId": {
+			"type": "integer",
+			"default": 0
+		},
+		"count": {
+			"type": "integer",
+			"default": 6
+		},
+		"layout": {
+			"type": "string",
+			"default": "carousel",
+			"enum": ["carousel", "grid", "list"]
+		},
+		"title": {
+			"type": "string",
+			"default": ""
+		}
+	},
+	"editorScript": "file:./edit.js",
+	"style": "shopwalk-recommendations"
+}
