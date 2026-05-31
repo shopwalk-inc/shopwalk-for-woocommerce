@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ---
 
+## [4.4.0] — 2026-05-30
+
+### Added
+- **AI Recommendations (v1.0).** New Pro / Pro+ feature ships three storefront recommendation types — "Customers also viewed" (collaborative filtering on order data), "Related products" (catalog-similarity from embeddings + categories), and "Frequently bought together" (market-basket from order history) — all driven by Shopwalk's ranker.
+- Placements: auto-inject on single product page (default), auto-inject on cart (FBT), a "Shopwalk Recommendations" Gutenberg block, and a `[shopwalk_recommendations type="related" product_id="123" count="6"]` shortcode.
+- Lazy-loaded via a new `/wp-json/shopwalk/v1/recommendations` REST endpoint so server-side render never blocks on the API call; carousels hydrate on scroll via IntersectionObserver.
+- Cards are rendered through `wc_get_template_part( 'content', 'product' )` so the merchant's theme styling carries over unchanged ("theme transparency" requirement).
+- 5-minute transient cache keyed by `(partner_id, type, context_product_id, user_id, count)`; per-product cache-bump version so a stock or price change can invalidate without scanning all transients.
+- Dashboard panel (placement settings, recommendation types, default count + layout) self-registers via `shopwalk_register_feature()` with a defensive function-exists fallback so the feature also boots on plugin cores that don't yet expose that helper.
+- Free tier: dashboard surfaces a "Pro required" notice; the storefront slots stay dormant and the REST endpoint returns `ok:false, code:"pro_required"`.
+
+### Endpoint
+- `POST /api/v1/plugin/ai/recommendations` on `api.shopwalk.com` — `Authorization: Bearer <license_key>` plus `X-Shopwalk-HMAC: <hmac(timestamp.body, license_key)>` and `X-Shopwalk-Timestamp` for replay protection.
+- Request: `{partner_id, type, context_product_id, user_id?, count}`. Response: `{product_ids, fallback, tokens_used}` — `fallback:true` means the ranker had insufficient data and returned a heuristic-based set.
+
+---
+
 ## [3.1.16] — 2026-05-20
 
 ### Changed
